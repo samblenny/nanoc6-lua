@@ -9,7 +9,7 @@ idf_component_register(
         src/lcorolib.c
         src/lctype.c
 #        src/ldblib.c     # optional (debug module)
-#        src/ldebug.c     # debug
+        src/ldebug.c     # debug stuff (required)
         src/ldo.c
         src/ldump.c
         src/lfunc.c

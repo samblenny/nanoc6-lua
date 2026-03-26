@@ -46,3 +46,28 @@ Then:
 idf.py flash monitor
 # Ctrl-] to exit
 ```
+
+
+## Add Lua Component
+
+```
+cd ~/esp/nanoc6-lua
+idf.py create-component -C components lua-5.4.8
+cd components
+tar xzf ~/Downloads/lua-5.4.8.tar.gz
+cd lua-5.4.8/src
+tar xzf ~/Downloads/one.tar.gz  # Lua 5.4 onefile tarball
+```
+
+After this, edit components/lua-5.4.8/CMakeLists.txt to include the right
+files from lua-5.4.8/src/.
+
+
+## License and Copyright Notices
+
+Copyright (c) 2026 Sam Blenny
+This project is licensed under the MIT license.
+
+Copyright © 1994–2025 Lua.org, PUC-Rio.
+Lua is licensed under the MIT license.
+See [components/lua-5.4.8/docs/readme.html](components/lua-5.4.8/docs/readme.html).

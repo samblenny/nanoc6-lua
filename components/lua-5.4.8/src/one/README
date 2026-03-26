@@ -1,0 +1,21 @@
+This code builds Lua 5.4 as a single file. This reduces the public symbols
+to the official C API and gives the compiler more room for optimization.
+
+The Makefile builds three files: the standalone interpreter lua,
+the compiler luac, and liblua.o, which is the whole Lua library
+as a single object file ready to be linked into your application.
+
+Place this directory inside the src directory in the Lua distribution,
+which you can get at
+	http://www.lua.org/ftp/lua-5.4.0.tar.gz
+
+Then do "make" with a suitable target.
+
+If you want to place this directory somewhere else, edit Makefile and
+change the variable SRC to point to the src directory in the Lua distribution.
+You can also give the value of SRC in the command line, as for instance in
+	make SRC=/tmp/lua-5.4.0/src macosx
+
+These files are distributed under the Lua license:
+	http://www.lua.org/license.html
+

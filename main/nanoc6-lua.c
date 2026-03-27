@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include "esp_system.h"  /* ESP_ERR_CHECK */
-#include "esp_console.h"
+#include "driver/usb_serial_jtag.h"
+#include "driver/usb_serial_jtag_vfs.h"
 #include "linenoise/linenoise.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -40,26 +41,45 @@ static void lua_task(void *pvParameters) {
 }
 */
 
-void app_main(void) {
-    esp_console_repl_t *repl = NULL;
-    esp_console_repl_config_t repl_config = ESP_CONSOLE_REPL_CONFIG_DEFAULT();
-    repl_config.prompt = ">";
-    repl_config.max_cmdline_length = 128;
+// Prepare the serial driver and linenoise for REPL line editing input
+void initializeUSBSerial() {
+    // Treat CR or CRLF as newline
+    usb_serial_jtag_vfs_set_rx_line_endings(ESP_LINE_ENDINGS_CR);
+    usb_serial_jtag_vfs_set_tx_line_endings(ESP_LINE_ENDINGS_CRLF);
 
-    esp_console_dev_usb_serial_jtag_config_t hw_config = 
-        ESP_CONSOLE_DEV_USB_SERIAL_JTAG_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(
-        esp_console_new_repl_usb_serial_jtag(&hw_config, &repl_config, &repl)
-    );
+    // Use blocking mode IO
+    fcntl(fileno(stdout), F_SETFL, 0);
+    fcntl(fileno(stdin), F_SETFL, 0);
+
+    usb_serial_jtag_driver_config_t usb_serial_jtag_config =
+        USB_SERIAL_JTAG_DRIVER_CONFIG_DEFAULT();
+
+    // Begin using USB serial JTAG driver
+    esp_err_t ok;
+    ok = usb_serial_jtag_driver_install(&usb_serial_jtag_config);
+    if(ok != ESP_OK) {
+        // TODO: handle this better
+        printf("This is bad\n");
+    }
+    usb_serial_jtag_vfs_use_driver();
 
     // This makes linenoise act as a vanilla dumb terminal readline without
     // any of its default weirdness. Without this, the cursor flickers between
     // the edit point and the first character of the line.
     linenoiseSetDumbMode(1);
+}
 
-    // This is a REPL helper function used by many esp-idf examples
-    ESP_ERROR_CHECK(esp_console_start_repl(repl));
+void app_main(void) {
+    initializeUSBSerial();
 
+    // A simple echo loop
+    while(1) {
+        char *line = linenoise("> ");
+        if(line != NULL && line[0] != 0) {
+            printf("%s\n", line);
+        }
+        linenoiseFree(line);
+    }
 
     // start interpreter with 64KB stack
 //    xTaskCreate(lua_task, "lua", 65536, NULL, 5, NULL);

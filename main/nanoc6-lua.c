@@ -11,35 +11,32 @@
 #include <unistd.h>  /* fsync */
 #include <fcntl.h>
 
-/*
 // Lua gets its own task so it can have a bigger stack than app_main default
 static void lua_task(void *pvParameters) {
-    char buff[256];
-    int error;
     lua_State *L = luaL_newstate();
     luaL_openlibs(L);
 
-    while (1) {
-        printf("> ");
-        fflush(stdout);
-        fsync(fileno(stdout));  // force USB packet
-        int len = usb_readline(buff, sizeof(buff));
-        if (len == 0) {
+    while(1) {
+        // Read a line (chunk) of input
+        char *line = linenoise("> ");
+        if (line == NULL) {
+            continue;
+        } else if (line[0] == 0) {
+            linenoiseFree(line);
             continue;
         }
-        error = luaL_loadstring(L, buff) || lua_pcall(L, 0, 0, 0);
-        if (error) {
-            fprintf(stderr, "%s\n", lua_tostring(L, -1));
-            fflush(stderr);
-            fsync(fileno(stderr));  // force USB packet
+
+        // Feed the chunk to Lua interperter
+        if (luaL_loadstring(L, line) || lua_pcall(L, 0, 0, 0)) {
+            printf("%s\n", lua_tostring(L, -1));
             lua_pop(L, 1);
         }
+        linenoiseFree(line);
     }
 
     lua_close(L);
     vTaskDelete(NULL);
 }
-*/
 
 // Prepare the serial driver and linenoise for REPL line editing input
 void initializeUSBSerial() {
@@ -72,17 +69,8 @@ void initializeUSBSerial() {
 void app_main(void) {
     initializeUSBSerial();
 
-    // A simple echo loop
-    while(1) {
-        char *line = linenoise("> ");
-        if(line != NULL && line[0] != 0) {
-            printf("%s\n", line);
-        }
-        linenoiseFree(line);
-    }
-
     // start interpreter with 64KB stack
-//    xTaskCreate(lua_task, "lua", 65536, NULL, 5, NULL);
+    xTaskCreate(lua_task, "lua", 65536, NULL, 5, NULL);
     // make sure app_main exiting doesn't cause problems
-//    vTaskDelete(NULL);
+    vTaskDelete(NULL);
 }

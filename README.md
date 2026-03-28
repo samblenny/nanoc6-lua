@@ -70,4 +70,4 @@ Copyright (c) 2026 Sam Blenny
 
 Copyright © 1994–2025 Lua.org, PUC-Rio.
 <br>Lua is licensed under the MIT license.
-See [components/lua-5.4.8/docs/readme.html](components/lua-5.4.8/docs/readme.html).
+See [components/lua-5.4.8/doc/readme.html](components/lua-5.4.8/doc/readme.html).

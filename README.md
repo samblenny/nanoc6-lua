@@ -66,8 +66,8 @@ files from lua-5.4.8/src/.
 ## License and Copyright Notices
 
 Copyright (c) 2026 Sam Blenny
-This project is licensed under the MIT license.
+<br>This project is licensed under the MIT license.
 
 Copyright © 1994–2025 Lua.org, PUC-Rio.
-Lua is licensed under the MIT license.
+<br>Lua is licensed under the MIT license.
 See [components/lua-5.4.8/docs/readme.html](components/lua-5.4.8/docs/readme.html).

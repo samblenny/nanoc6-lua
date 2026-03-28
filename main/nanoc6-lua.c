@@ -16,6 +16,7 @@
 // Lua gets its own task so it can have a bigger stack than app_main default
 static void lua_task(void *pvParameters) {
     char line_buffer[LINE_BUFFER_SIZE];
+    memset(line_buffer, 0, sizeof(line_buffer));
     lua_State *L = luaL_newstate();
     luaL_openlibs(L);
 

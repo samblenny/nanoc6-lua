@@ -66,7 +66,7 @@ files from lua-5.4.8/src/.
 ## License and Copyright Notices
 
 Copyright (c) 2026 Sam Blenny
-<br>This project is licensed under the MIT license.
+<br>This nanoc6-lua project is licensed under the MIT license.
 
 Copyright © 1994–2025 Lua.org, PUC-Rio.
 <br>Lua is licensed under the MIT license.

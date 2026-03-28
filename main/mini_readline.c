@@ -2,9 +2,9 @@
 #include <errno.h>
 #include <unistd.h>
 #include <string.h>
-#include <wchar.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "utf8.h"
 
 #define LINE_BUFFER_SIZE 256
 
@@ -38,53 +38,6 @@ static void redraw_from_cursor(context_t *ctx)
     for (int i = 0; i < num_bytes; i++) {
         write(STDOUT_FILENO, "\b", 1);
     }
-}
-
-// Decode UTF-8 codepoint at position in buffer
-// Returns the codepoint value
-static uint32_t utf8_decode_codepoint(const char *buf, int pos, int end)
-{
-    if (pos >= end) {
-        return 0;
-    }
-
-    unsigned char first = buf[pos];
-
-    // Single-byte ASCII (0xxxxxxx)
-    if ((first & 0x80) == 0) {
-        return (uint32_t)first;
-    }
-
-    // Two-byte sequence (110xxxxx 10xxxxxx)
-    if ((first & 0xE0) == 0xC0 && pos + 1 < end) {
-        return ((uint32_t)(first & 0x1F) << 6) |
-               ((uint32_t)(buf[pos + 1] & 0x3F));
-    }
-
-    // Three-byte sequence (1110xxxx 10xxxxxx 10xxxxxx)
-    if ((first & 0xF0) == 0xE0 && pos + 2 < end) {
-        return ((uint32_t)(first & 0x0F) << 12) |
-               ((uint32_t)(buf[pos + 1] & 0x3F) << 6) |
-               ((uint32_t)(buf[pos + 2] & 0x3F));
-    }
-
-    // Four-byte sequence (11110xxx 10xxxxxx 10xxxxxx 10xxxxxx)
-    if ((first & 0xF8) == 0xF0 && pos + 3 < end) {
-        return ((uint32_t)(first & 0x07) << 18) |
-               ((uint32_t)(buf[pos + 1] & 0x3F) << 12) |
-               ((uint32_t)(buf[pos + 2] & 0x3F) << 6) |
-               ((uint32_t)(buf[pos + 3] & 0x3F));
-    }
-
-    // Invalid UTF-8
-    return 0xFFFD;
-}
-
-// Get display width of a codepoint
-static int codepoint_width(const char *buf, int pos, int end)
-{
-    uint32_t cp = utf8_decode_codepoint(buf, pos, end);
-    return wcwidth((wchar_t)cp);
 }
 
 // Delete character at current position (for backspace)
@@ -182,7 +135,8 @@ static void move_cursor_left(context_t *ctx)
         }
 
         // Get display width of the character we're moving back from
-        int width = codepoint_width(ctx->line_buffer, new_pos, ctx->end_pos);
+        int width = utf8_codepoint_width(ctx->line_buffer, new_pos,
+            ctx->end_pos);
 
         // Send backspaces equal to display width
         for (int i = 0; i < width; i++) {
@@ -229,7 +183,8 @@ static void move_cursor_right(context_t *ctx)
         }
 
         // Get display width of the character we're moving to
-        int width = codepoint_width(ctx->line_buffer, ctx->pos, ctx->end_pos);
+        int width = utf8_codepoint_width(ctx->line_buffer, ctx->pos,
+            ctx->end_pos);
 
         // Send forward escapes equal to display width
         for (int i = 0; i < width; i++) {

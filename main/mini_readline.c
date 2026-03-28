@@ -2,6 +2,7 @@
 #include <errno.h>
 #include <unistd.h>
 #include <string.h>
+#include <wchar.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -24,17 +25,66 @@ typedef struct Context {
 // Clear from cursor to end of line, then redraw
 static void redraw_from_cursor(context_t *ctx)
 {
-    // Clear from cursor postion to end of line
+    // Clear from cursor position to end of line
     write(STDOUT_FILENO, "\e[K", 3);
 
     // Redraw from cursor to end of buffer
     void * start = ctx->line_buffer + ctx->pos;
-    write(STDOUT_FILENO, start, ctx->end_pos - ctx->pos);
+    int num_bytes = ctx->end_pos - ctx->pos;
+    write(STDOUT_FILENO, start, num_bytes);
 
-    // Put cursor back where it belongs
-    for (int i = ctx->end_pos - ctx->pos; i > 0; i--) {
+    // Move cursor back to current position by sending backspaces
+    // for each byte we just wrote (terminal handles UTF-8 rendering)
+    for (int i = 0; i < num_bytes; i++) {
         write(STDOUT_FILENO, "\b", 1);
     }
+}
+
+// Decode UTF-8 codepoint at position in buffer
+// Returns the codepoint value
+static uint32_t utf8_decode_codepoint(const char *buf, int pos, int end)
+{
+    if (pos >= end) {
+        return 0;
+    }
+
+    unsigned char first = buf[pos];
+
+    // Single-byte ASCII (0xxxxxxx)
+    if ((first & 0x80) == 0) {
+        return (uint32_t)first;
+    }
+
+    // Two-byte sequence (110xxxxx 10xxxxxx)
+    if ((first & 0xE0) == 0xC0 && pos + 1 < end) {
+        return ((uint32_t)(first & 0x1F) << 6) |
+               ((uint32_t)(buf[pos + 1] & 0x3F));
+    }
+
+    // Three-byte sequence (1110xxxx 10xxxxxx 10xxxxxx)
+    if ((first & 0xF0) == 0xE0 && pos + 2 < end) {
+        return ((uint32_t)(first & 0x0F) << 12) |
+               ((uint32_t)(buf[pos + 1] & 0x3F) << 6) |
+               ((uint32_t)(buf[pos + 2] & 0x3F));
+    }
+
+    // Four-byte sequence (11110xxx 10xxxxxx 10xxxxxx 10xxxxxx)
+    if ((first & 0xF8) == 0xF0 && pos + 3 < end) {
+        return ((uint32_t)(first & 0x07) << 18) |
+               ((uint32_t)(buf[pos + 1] & 0x3F) << 12) |
+               ((uint32_t)(buf[pos + 2] & 0x3F) << 6) |
+               ((uint32_t)(buf[pos + 3] & 0x3F));
+    }
+
+    // Invalid UTF-8
+    return 0xFFFD;
+}
+
+// Get display width of a codepoint
+static int codepoint_width(const char *buf, int pos, int end)
+{
+    uint32_t cp = utf8_decode_codepoint(buf, pos, end);
+    return wcwidth((wchar_t)cp);
 }
 
 // Delete character at current position (for backspace)
@@ -48,11 +98,6 @@ static void delete_char_at(context_t *ctx)
         }
         int char_bytes = ctx->pos - del_pos;
 
-        // Erase char_bytes from screen
-        for (int i = 0; i < char_bytes; i++) {
-            write(STDOUT_FILENO, "\b \b", 3);
-        }
-
         // Shift remaining characters left in buffer
         for (int i = ctx->pos; i < ctx->end_pos; i++) {
             ctx->line_buffer[i - char_bytes] = ctx->line_buffer[i];
@@ -61,12 +106,18 @@ static void delete_char_at(context_t *ctx)
         // Update positions
         ctx->pos = del_pos;
         ctx->end_pos -= char_bytes;
+
+        // Move cursor back and redraw from new position
+        for (int i = 0; i < char_bytes; i++) {
+            write(STDOUT_FILENO, "\b", 1);
+        }
         redraw_from_cursor(ctx);
     }
 }
 
 // Handle a single character in normal mode
-static void handle_normal_char(unsigned char ch, context_t *ctx) {
+static void handle_normal_char(unsigned char ch, context_t *ctx)
+{
     // Validate state before processing
     if (ctx->pos < 0 || ctx->pos > ctx->end_pos ||
         ctx->end_pos > ctx->line_buffer_size - 1)
@@ -102,20 +153,90 @@ static void handle_normal_char(unsigned char ch, context_t *ctx) {
 }
 
 // Move cursor left in buffer and on screen
+// UTF-8 aware: respects character boundaries and emoji/ZWJ sequences
 static void move_cursor_left(context_t *ctx)
 {
     if (ctx->pos > 0) {
-        (ctx->pos)--;
-        write(STDOUT_FILENO, "\x1b[D", 3);  // ESC [ D
+        int new_pos = ctx->pos - 1;
+
+        // Walk back to UTF-8 character start (find non-continuation byte)
+        while (new_pos > 0 &&
+               (ctx->line_buffer[new_pos] & 0xC0) == 0x80)
+        {
+            new_pos--;
+        }
+
+        // Check if we're at a ZWJ (0xE2 0x80 0x8D in UTF-8)
+        if (new_pos + 2 < ctx->pos &&
+            ctx->line_buffer[new_pos] == 0xE2 &&
+            ctx->line_buffer[new_pos + 1] == 0x80 &&
+            ctx->line_buffer[new_pos + 2] == 0x8D)
+        {
+            // This is a ZWJ marker, walk back to the codepoint before it
+            new_pos--;
+            while (new_pos > 0 &&
+                   (ctx->line_buffer[new_pos] & 0xC0) == 0x80)
+            {
+                new_pos--;
+            }
+        }
+
+        // Get display width of the character we're moving back from
+        int width = codepoint_width(ctx->line_buffer, new_pos, ctx->end_pos);
+
+        // Send backspaces equal to display width
+        for (int i = 0; i < width; i++) {
+            write(STDOUT_FILENO, "\x1b[D", 3);  // ESC [ D
+        }
+
+        ctx->pos = new_pos;
     }
 }
 
 // Move cursor right in buffer and on screen
+// UTF-8 aware: respects character boundaries and emoji/ZWJ sequences
 static void move_cursor_right(context_t *ctx)
 {
     if (ctx->pos < ctx->end_pos) {
-        (ctx->pos)++;
-        write(STDOUT_FILENO, "\x1b[C", 3);  // ESC [ C
+        int new_pos = ctx->pos;
+
+        // Move to next byte
+        new_pos++;
+
+        // Skip any continuation bytes (UTF-8 bytes matching 10xxxxxx)
+        while (new_pos < ctx->end_pos &&
+               (ctx->line_buffer[new_pos] & 0xC0) == 0x80)
+        {
+            new_pos++;
+        }
+
+        // Check if next codepoint is ZWJ (0xE2 0x80 0x8D)
+        // If so, skip the ZWJ and any following emoji
+        while (new_pos + 2 < ctx->end_pos &&
+               ctx->line_buffer[new_pos] == 0xE2 &&
+               ctx->line_buffer[new_pos + 1] == 0x80 &&
+               ctx->line_buffer[new_pos + 2] == 0x8D)
+        {
+            // Skip ZWJ (3 bytes)
+            new_pos += 3;
+
+            // Skip the next codepoint after ZWJ
+            while (new_pos < ctx->end_pos &&
+                   (ctx->line_buffer[new_pos] & 0xC0) == 0x80)
+            {
+                new_pos++;
+            }
+        }
+
+        // Get display width of the character we're moving to
+        int width = codepoint_width(ctx->line_buffer, ctx->pos, ctx->end_pos);
+
+        // Send forward escapes equal to display width
+        for (int i = 0; i < width; i++) {
+            write(STDOUT_FILENO, "\x1b[C", 3);  // ESC [ C
+        }
+
+        ctx->pos = new_pos;
     }
 }
 

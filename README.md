@@ -63,6 +63,31 @@ After this, edit components/lua-5.4.8/CMakeLists.txt to include the right
 files from lua-5.4.8/src/.
 
 
+## Setting Up Unit Tests
+
+To get unit tests working, you need to combine some of the information from
+Espressif's
+[Unit Testing](https://docs.espressif.com/projects/esp-idf/en/v6.0/esp32c6/api-guides/unit-tests.html)
+documentation page with the methods demonstrated in the
+[examples/system\_unit\_test](https://github.com/espressif/esp-idf/tree/master/examples/system/unit_test)
+example project in the esp-idf repo on GitHub.
+
+Key Points:
+1. Code to be tested needs to be a component
+2. Unit tests go in `components/whatever/tests` in your project repo
+3. You also need a test runner app in /test next to /main at the top level of
+   your project. The test app runner should follow the `unit_test` example for
+   CMakeLists.txt setup and code to invoke the Unity test library.
+4. To build and run the test app:
+   ```
+   cd $REPO_ROOT_DIR/tests     # IMPORTANT: cd to tests before running idf.py!
+   idf.py set-target esp32c6   # menuconfig won't work right without this
+   idf.py menuconfig           # set STDIO to use USB serial
+   idf.py flash monitor        # flash and run as usual
+   ```
+   Test runner output will print on the serial console.
+
+
 ## License and Copyright Notices
 
 Copyright (c) 2026 Sam Blenny

@@ -1,10 +1,8 @@
-# components/utf8/CMakeLists.txt
+# see instructions at
+# https://docs.espressif.com/projects/esp-idf/en/v6.0/esp32c6/api-guides/unit-tests.html
 
 idf_component_register(
-    SRCS utf8.c
-    INCLUDE_DIRS "."     # for .h includes
+    SRCS "."
+    INCLUDE_DIRS "."
+	REQUIRES unity
 )
-
-# Make headers available to other components
-target_include_directories(${COMPONENT_LIB} PUBLIC src)
-

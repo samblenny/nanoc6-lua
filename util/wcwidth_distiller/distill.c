@@ -43,6 +43,8 @@ int main() {
         {0x0080, 0x00FF, "Latin-1 Supplement"},
         {0x0100, 0x017F, "Latin Extended-A"},
         {0x0180, 0x024F, "Latin Extended-B"},
+        {0x2070, 0x2079, "Superscripts"},
+        {0x2200, 0x22FF, "Mathematical Operators"},
         {0x0300, 0x036F, "Combining Diacritical Marks"},
         {0x0370, 0x03FF, "Greek"},
         {0x0400, 0x04FF, "Cyrillic"},
@@ -55,6 +57,9 @@ int main() {
         {0x1100, 0x11FF, "Hangul Jamo"},
         {0x2000, 0x206F, "General Punctuation"},
         {0xFE00, 0xFE0F, "Variation Selectors"},
+// These are misleading due to not considering the FEOF variaton selector
+//        {0x1F600, 0x1F64F, "Emoticons"},
+//        {0x1F300, 0x1F5FF, "Miscellaneous Symbols and Pictographs"},
         {0, 0, NULL}  // sentinel
     };
 
@@ -150,6 +155,8 @@ Scanning ASCII (U+0000–U+007F)...
 Scanning Latin-1 Supplement (U+0080–U+00FF)...
 Scanning Latin Extended-A (U+0100–U+017F)...
 Scanning Latin Extended-B (U+0180–U+024F)...
+Scanning Superscripts (U+2070–U+2079)...
+Scanning Mathematical Operators (U+2200–U+22FF)...
 Scanning Combining Diacritical Marks (U+0300–U+036F)...
 Scanning Greek (U+0370–U+03FF)...
 Scanning Cyrillic (U+0400–U+04FF)...
@@ -162,11 +169,11 @@ Scanning Hangul Syllables (U+AC00–U+D7A3)...
 Scanning Hangul Jamo (U+1100–U+11FF)...
 Scanning General Punctuation (U+2000–U+206F)...
 Scanning Variation Selectors (U+FE00–U+FE0F)...
-Done. Found 46 ranges.
+Done. Found 50 ranges.
 
-After filtering out -1 results: 34 ranges.
+After filtering out -1 results: 37 ranges.
 
-After merging: 29 ranges.
+After merging: 32 ranges.
 
 Start     End       Count     Width
 --------- --------- --------- -----
@@ -174,6 +181,9 @@ Start     End       Count     Width
 0x000020   0x00007E        95     1
 0x0000A0   0x0000AC        13     1
 0x0000AE   0x00024F       418     1
+0x002070   0x002071         2     1
+0x002074   0x002079         6     1
+0x002200   0x0022FF       256     1
 0x000300   0x00036F       112     0
 0x000370   0x000377         8     1
 0x00037A   0x00037F         6     1

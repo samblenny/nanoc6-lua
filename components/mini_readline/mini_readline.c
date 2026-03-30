@@ -135,7 +135,7 @@ static void move_cursor_left(context_t *ctx)
         }
 
         // Get display width of the character we're moving back from
-        int width = utf8_codepoint_width(ctx->line_buffer, new_pos,
+        int width = utf8_character_width(ctx->line_buffer, new_pos,
             ctx->end_pos);
 
         // Send backspaces equal to display width
@@ -183,7 +183,7 @@ static void move_cursor_right(context_t *ctx)
         }
 
         // Get display width of the character we're moving to
-        int width = utf8_codepoint_width(ctx->line_buffer, ctx->pos,
+        int width = utf8_character_width(ctx->line_buffer, ctx->pos,
             ctx->end_pos);
 
         // Send forward escapes equal to display width

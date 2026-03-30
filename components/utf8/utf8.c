@@ -1,4 +1,26 @@
-#include <wchar.h>
+#include <stdint.h>
+#include "utf8_width_ranges.h"
+
+// Get display width of a codepoint using embedded lookup table
+// Returns: 0 for zero-width (combining, ZWJ, variation selectors)
+//          1 for narrow (ASCII, Latin, Cyrillic, etc)
+//          2 for wide (CJK, Hiragana, Katakana, Hangul)
+//         -1 for control/unprintable (not in lookup table)
+int utf8_codepoint_width(uint32_t cp)
+{
+    // Linear search through width ranges
+    for (int i = 0; i < utf8_width_ranges_count; i++) {
+        if (cp >= utf8_width_ranges[i].start &&
+            cp <= utf8_width_ranges[i].end)
+        {
+            return utf8_width_ranges[i].width;
+        } else if (cp < utf8_width_ranges[i].start) {
+            // ranges are sorted; this range is above codepoint, so bail out
+            return -1;
+        }
+    }
+    return -1;  // Default: control/unprintable/unassigned
+}
 
 // Decode UTF-8 codepoint at position in buffer
 // Returns the codepoint value
@@ -40,9 +62,10 @@ uint32_t utf8_decode_codepoint(const char *buf, int pos, int end)
     return 0xFFFD;
 }
 
-// Get display width of a codepoint
-int utf8_codepoint_width(const char *buf, int pos, int end)
+// Get display width of a UTF-8 codepoint at buffer position
+// Decodes the character at (buf, pos) and returns its display width
+int utf8_character_width(const char *buf, int pos, int end)
 {
     uint32_t cp = utf8_decode_codepoint(buf, pos, end);
-    return wcwidth((wchar_t)cp);
+    return utf8_codepoint_width(cp);
 }

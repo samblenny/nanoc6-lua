@@ -31,34 +31,58 @@ TEST_CASE("decode 4-byte codepoint: U+1f600", "[utf8]")
 
 TEST_CASE("ASCII character width", "[utf8]")
 {
-    int n = utf8_codepoint_width("A", 0, 1);
+    int n = utf8_character_width("A", 0, 1);
     TEST_ASSERT_EQUAL(1, n);
 }
 
-// THIS FAILS. wcwidth returns -1. ESP-IDF wcwidth() seems to be ASCII-only,
-// and setlocale() apparently only suports a minimal default locale.
+TEST_CASE("Latin diacritics character width", "[utf8]")
+{
+    char *chars[5] = {"è", "é", "ë", "ě", "ē"};
+    for (int i = 0; i < sizeof(chars)/sizeof(chars[0]); i++) {
+        char *s = chars[i];
+        int n = utf8_character_width(s, 0, strlen(s));
+        TEST_ASSERT_EQUAL(1, n);
+    }
+}
+
+TEST_CASE("Cyrillic character width", "[utf8]")
+{
+    char *chars[3] = {"Д", "Є", "Э"};
+    for (int i = 0; i < sizeof(chars)/sizeof(chars[0]); i++) {
+        char *s = chars[i];
+        int n = utf8_character_width(s, 0, strlen(s));
+        TEST_ASSERT_EQUAL(1, n);
+    }
+}
+
+TEST_CASE("Greek character width", "[utf8]")
+{
+    char *chars[2] = {"∑", "ω"};
+    for (int i = 0; i < sizeof(chars)/sizeof(chars[0]); i++) {
+        char *s = chars[i];
+        int n = utf8_character_width(s, 0, strlen(s));
+        TEST_ASSERT_EQUAL(1, n);
+    }
+}
+
 TEST_CASE("Chinese character width", "[utf8]")
 {
     char *s = "好";
-    int n = utf8_codepoint_width(s, 0, strlen(s));
+    int n = utf8_character_width(s, 0, strlen(s));
     TEST_ASSERT_EQUAL(2, n);
 }
 
-// THIS FAILS. wcwidth returns -1. ESP-IDF wcwidth() seems to be ASCII-only,
-// and setlocale() apparently only suports a minimal default locale.
 TEST_CASE("Single-codepoint Emoji width", "[utf8]")
 {
     char *s = "😀";  // 1F600
-    int n = utf8_codepoint_width(s, 0, strlen(s));
+    int n = utf8_character_width(s, 0, strlen(s));
     TEST_ASSERT_EQUAL(2, n);
 }
 
-// THIS FAILS. wcwidth returns -1. ESP-IDF wcwidth() seems to be ASCII-only,
-// and setlocale() apparently only suports a minimal default locale.
 TEST_CASE("Multi-codepoint emoji with ZWJ width", "[utf8]")
 {
     char *s = "🏴‍☠️";  // 1F3F4 200D 2620 FE0F
-    int n = utf8_codepoint_width(s, 0, strlen(s));
+    int n = utf8_character_width(s, 0, strlen(s));
     TEST_ASSERT_EQUAL(2, n);
 }
 
@@ -78,14 +102,20 @@ Running decode 4-byte codepoint: U+1f600...
 ./components/utf8/test/test_utf8.c:26:decode 4-byte codepoint: U+1f600:PASS
 Running ASCII character width...
 ./components/utf8/test/test_utf8.c:32:ASCII character width:PASS
+Running Latin diacritics character width...
+./components/utf8/test/test_utf8.c:38:Latin diacritics character width:PASS
+Running Cyrillic character width...
+./components/utf8/test/test_utf8.c:48:Cyrillic character width:PASS
+Running Greek character width...
+./components/utf8/test/test_utf8.c:59:Greek character width:PASS
 Running Chinese character width...
-./components/utf8/test/test_utf8.c:44:Chinese character width:FAIL: Expected 2 Was -1. Function [utf8]
+./components/utf8/test/test_utf8.c:69:Chinese character width:PASS
 Running Single-codepoint Emoji width...
-./components/utf8/test/test_utf8.c:53:Single-codepoint Emoji width:FAIL: Expected 2 Was -1. Function [utf8]
+./components/utf8/test/test_utf8.c:77:Single-codepoint Emoji width:PASS
 Running Multi-codepoint emoji with ZWJ width...
-./components/utf8/test/test_utf8.c:62:Multi-codepoint emoji with ZWJ width:FAIL: Expected 2 Was -1. Function [utf8]
+./components/utf8/test/test_utf8.c:85:Multi-codepoint emoji with ZWJ width:PASS
 
 -----------------------
-8 Tests 3 Failures 0 Ignored
-FAIL
+11 Tests 0 Failures 0 Ignored
+OK
 */

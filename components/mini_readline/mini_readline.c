@@ -13,28 +13,39 @@ typedef enum {
     STATE_BRACKET
 } input_state_t;
 
+typedef struct Utf8Codepoint {
+    uint8_t expected;
+    uint8_t received;
+} utf8codepoint_t;
+
 typedef struct Context {
     char *buf;
     size_t buf_size;
     int pos;
     int end_pos;
+    utf8codepoint_t codepoint;
 } context_t;
 
 // Clear from cursor to end of line, then redraw
-// The offset argument allows correct cursor movement for insert vs. delete
-static void redraw_from_cursor(context_t *ctx, int8_t offset)
+// offset: adjust buffer start point to beginning of utf-8 sequence
+// width: allows correct cursor movement for insert vs. delete
+static void redraw_from_cursor(context_t *ctx, int offset, int width)
 {
     // Clear
     write(STDOUT_FILENO, "\e[K", 3);
 
     // Redraw
-    void * start = ctx->buf + ctx->pos;
-    int num_bytes = ctx->end_pos - ctx->pos;
+    void * start = ctx->buf + ctx->pos - offset;
+    int num_bytes = ctx->end_pos - ctx->pos + offset;
+    // TODO: parse this buffer segment into characters, codepoints, and
+    // grapheme clusters and tally up the total width of all the glyphs
     write(STDOUT_FILENO, start, num_bytes);
 
     // Move cursor back to current position by sending backspaces
     // for each byte we just wrote (terminal handles UTF-8 rendering)
-    for (int i = 0; i < num_bytes - offset; i++) {
+    //
+    // TODO: fix this! bytes is the wrong way to calculate glyph width
+    for (int i = 0; i < num_bytes - width; i++) {
         write(STDOUT_FILENO, "\b", 1);
     }
 }
@@ -49,6 +60,8 @@ static void delete_char_at(context_t *ctx)
             del_pos--;
         }
         int char_bytes = ctx->pos - del_pos;
+        int width = utf8_character_width(ctx->buf, ctx->pos - char_bytes,
+            ctx->pos);
 
         // Shift remaining characters left in buffer
         for (int i = ctx->pos; i < ctx->end_pos; i++) {
@@ -60,10 +73,10 @@ static void delete_char_at(context_t *ctx)
         ctx->end_pos -= char_bytes;
 
         // Move cursor back and redraw from new position
-        for (int i = 0; i < char_bytes; i++) {
+        for (int i = 0; i < width; i++) {
             write(STDOUT_FILENO, "\b", 1);
         }
-        redraw_from_cursor(ctx, 0);
+        redraw_from_cursor(ctx, 0, 0);
     }
 }
 
@@ -111,8 +124,42 @@ static void handle_normal_char(unsigned char ch, context_t *ctx)
                 ctx->buf[i] = ctx->buf[i - 1];
             }
         }
-        // Set the new character and update cursor position
+        // Set the new byte in the line buffer
         ctx->buf[ctx->pos] = ch;
+        (ctx->pos)++;
+
+        // Update the utf-8 decoding context
+        int offset = 1;
+        int width = 0;
+        if ((ch & 0b10000000) == 0b00000000) {
+            // ASCII
+            ctx->codepoint.expected = 1;
+            ctx->codepoint.received = 1;
+            width = 1;
+        } else if ((ch & 0b11000000) == 0b10000000) {
+            // UTF-8 continuation byte
+            ctx->codepoint.received += 1;
+            // Check if this is last byte of a codepoint
+            if (ctx->codepoint.received == ctx->codepoint.expected) {
+                // Check terminal column width of this codepoint
+                int width = utf8_character_width(ctx->buf,
+                    ctx->pos - ctx->codepoint.expected - 1, ctx->pos - 1);
+                width = width >= 0 ? width : 0;
+                offset = ctx->codepoint.expected;
+            }
+        } else if ((ch & 0b11100000) == 0b11000000) {
+            // First byte of 2-byte codepoint
+            ctx->codepoint.expected = 2;
+            ctx->codepoint.received = 1;
+        } else if ((ch & 0b11110000) == 0b11100000) {
+            // First byte of 3-byte codepoint
+            ctx->codepoint.expected = 3;
+            ctx->codepoint.received = 1;
+        } else if ((ch & 0b11111000) == 0b11110000) {
+            // First byte of 4-byte codepoint
+            ctx->codepoint.expected = 4;
+            ctx->codepoint.received = 1;
+        }
 
         // Update the terminal
         // CAUTION: Subtle tricky things happen here when inserting multi-byte
@@ -120,19 +167,10 @@ static void handle_normal_char(unsigned char ch, context_t *ctx)
         // updated 1 byte at a time. Do not change this code without carefully
         // testing insert and append behavior (e.g. "abcdef" -> "abc好def").
         if (insert) {
-            // TODO: Figure out how to make this properly handle utf-8
-            // sequences where the buffer insert position needs to advance for
-            // every byte but the the terminal's cursor position should only
-            // advance at the completion of a codepoint or grapheme cluster.
-            // CAUTION: This is tricky. An example symptom of getting it wrong
-            // is that pasting a "好" into "abcdef" can look like "abc���def",
-            // where "�" is the unicode replacement character (but the buffer
-            // contents can still be correct).
-            redraw_from_cursor(ctx, 1);
+            redraw_from_cursor(ctx, offset, width);
         } else {
             write(STDOUT_FILENO, &ch, 1);
         }
-        (ctx->pos)++;
     }
 }
 

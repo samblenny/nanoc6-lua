@@ -31,22 +31,27 @@ typedef struct Context {
 // width: allows correct cursor movement for insert vs. delete
 static void redraw_from_cursor(context_t *ctx, int offset, int width)
 {
-    // Clear
+    // Push current cursor position, then clear to end of line
+    write(STDOUT_FILENO, "\e7", 2); // macOS terminal doesn't support ESC[s
     write(STDOUT_FILENO, "\e[K", 3);
 
     // Redraw
     void * start = ctx->buf + ctx->pos - offset;
     int num_bytes = ctx->end_pos - ctx->pos + offset;
-    // TODO: parse this buffer segment into characters, codepoints, and
-    // grapheme clusters and tally up the total width of all the glyphs
     write(STDOUT_FILENO, start, num_bytes);
 
-    // Move cursor back to current position by sending backspaces
-    // for each byte we just wrote (terminal handles UTF-8 rendering)
-    //
-    // TODO: fix this! bytes is the wrong way to calculate glyph width
-    for (int i = 0; i < num_bytes - width; i++) {
-        write(STDOUT_FILENO, "\b", 1);
+    // Pop the old cursor position (macOS terminal doesn't support ESC[u)
+    write(STDOUT_FILENO, "\e8", 2);
+
+    // Fine tune cursor position for character width
+    if (width >= 0 ) {
+        for (int i = 0; i < width; i++) {
+            write(STDOUT_FILENO, "\e[C", 3);
+        }
+    } else {
+        for (int i = 0; i > width; i--) {
+            write(STDOUT_FILENO, "\b", 1);
+        }
     }
 }
 
@@ -60,8 +65,8 @@ static void delete_char_at(context_t *ctx)
             del_pos--;
         }
         int char_bytes = ctx->pos - del_pos;
-        int width = utf8_character_width(ctx->buf, ctx->pos - char_bytes,
-            ctx->pos);
+        int width = utf8_character_width(ctx->buf, del_pos,
+            del_pos + char_bytes);
 
         // Shift remaining characters left in buffer
         for (int i = ctx->pos; i < ctx->end_pos; i++) {
@@ -143,7 +148,7 @@ static void handle_normal_char(unsigned char ch, context_t *ctx)
             if (ctx->codepoint.received == ctx->codepoint.expected) {
                 // Check terminal column width of this codepoint
                 int width = utf8_character_width(ctx->buf,
-                    ctx->pos - ctx->codepoint.expected - 1, ctx->pos - 1);
+                    ctx->pos - ctx->codepoint.expected, ctx->pos);
                 width = width >= 0 ? width : 0;
                 offset = ctx->codepoint.expected;
             }

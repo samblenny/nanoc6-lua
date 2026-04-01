@@ -21,7 +21,8 @@ typedef struct Context {
 } context_t;
 
 // Clear from cursor to end of line, then redraw
-static void redraw_from_cursor(context_t *ctx)
+// The offset argument allows correct cursor movement for insert vs. delete
+static void redraw_from_cursor(context_t *ctx, int8_t offset)
 {
     // Clear
     write(STDOUT_FILENO, "\e[K", 3);
@@ -33,7 +34,7 @@ static void redraw_from_cursor(context_t *ctx)
 
     // Move cursor back to current position by sending backspaces
     // for each byte we just wrote (terminal handles UTF-8 rendering)
-    for (int i = 0; i < num_bytes; i++) {
+    for (int i = 0; i < num_bytes - offset; i++) {
         write(STDOUT_FILENO, "\b", 1);
     }
 }
@@ -62,7 +63,7 @@ static void delete_char_at(context_t *ctx)
         for (int i = 0; i < char_bytes; i++) {
             write(STDOUT_FILENO, "\b", 1);
         }
-        redraw_from_cursor(ctx);
+        redraw_from_cursor(ctx, 0);
     }
 }
 
@@ -112,13 +113,26 @@ static void handle_normal_char(unsigned char ch, context_t *ctx)
         }
         // Set the new character and update cursor position
         ctx->buf[ctx->pos] = ch;
-        (ctx->pos)++;
 
         // Update the terminal
-        write(STDOUT_FILENO, &ch, 1);
+        // CAUTION: Subtle tricky things happen here when inserting multi-byte
+        // utf-8 codepoints or grapheme clusters because the buffer state is
+        // updated 1 byte at a time. Do not change this code without carefully
+        // testing insert and append behavior (e.g. "abcdef" -> "abc好def").
         if (insert) {
-            redraw_from_cursor(ctx);
+            // TODO: Figure out how to make this properly handle utf-8
+            // sequences where the buffer insert position needs to advance for
+            // every byte but the the terminal's cursor position should only
+            // advance at the completion of a codepoint or grapheme cluster.
+            // CAUTION: This is tricky. An example symptom of getting it wrong
+            // is that pasting a "好" into "abcdef" can look like "abc���def",
+            // where "�" is the unicode replacement character (but the buffer
+            // contents can still be correct).
+            redraw_from_cursor(ctx, 1);
+        } else {
+            write(STDOUT_FILENO, &ch, 1);
         }
+        (ctx->pos)++;
     }
 }
 
